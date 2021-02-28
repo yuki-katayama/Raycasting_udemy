@@ -83,13 +83,13 @@ class Player {
         circle(MINIMAP_SCALE_FACTOR * this.x,
             MINIMAP_SCALE_FACTOR * this.y,
             MINIMAP_SCALE_FACTOR * this.radius);
-        /*stroke("red");
+        stroke("blue");
         line(
-            this.x,
-            this.y,
-            this.x + Math.cos(this.rotationAngle) * 30,
-            this.y + Math.sin(this.rotationAngle) * 30
-        );*/
+            MINIMAP_SCALE_FACTOR * this.x,
+            MINIMAP_SCALE_FACTOR * this.y,
+            MINIMAP_SCALE_FACTOR * this.x + Math.cos(this.rotationAngle) * 30,
+            MINIMAP_SCALE_FACTOR * this.y + Math.sin(this.rotationAngle) * 30
+        );
     }
 }
 
