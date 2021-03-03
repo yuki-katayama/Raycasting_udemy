@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <limits.h>
+#include <stdint.h>
 #include <SDL2/SDL.h>
 #include "constants.h"
 #include "textures.h"
@@ -10,7 +11,7 @@ const int map[MAP_NUM_ROWS][MAP_NUM_COLS] = {
     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
     {1, 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8, 0, 0, 1},
     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 0, 0, 1},
     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
@@ -50,10 +51,10 @@ SDL_Renderer* renderer = NULL;
 int isGameRunning = FALSE;
 float ticksLastFrame = 0;
 
-Uint32* colorBuffer = NULL;
+uint32_t* colorBuffer = NULL;
 SDL_Texture* colorBufferTexture;
-Uint32* wallTexture = NULL;
-Uint32* textures[NUM_TEXTURES];
+uint32_t* wallTexture = NULL;
+uint32_t* textures[NUM_TEXTURES];
 
 int initializeWindow()
 {
@@ -265,11 +266,11 @@ void castRay(float rayAngle, int stripId)
 
 void castAllRays()
 {
-	float rayAngle = player.rotationAngle - (FOV_ANGLE / 2);
-	for (int stripId = 0; stripId < NUM_RAYS; stripId++) {
-		castRay(rayAngle, stripId);
-
-		rayAngle += FOV_ANGLE / NUM_RAYS;
+	// float rayAngle = player.rotationAngle - (FOV_ANGLE / 2);
+	for (int col = 0; col < NUM_RAYS; col++)
+	{
+		float rayAngle = player.rotationAngle + atan((col - NUM_RAYS / 2) / DIST_PROJ_PLANE);
+		castRay(rayAngle, col);
 	}
 }
 
@@ -359,7 +360,7 @@ void update()
 	castAllRays();
 }
 
-void generate3Dprojection()
+void generate3DProjection()
 {
 	// printf("%f, %f\n", (WINDOW_WIDTH / 2) / tan(FOV_ANGLE / 2), (float)WINDOW_HEIGHT);
 	for (int i = 0; i < NUM_RAYS; i++)
@@ -367,9 +368,9 @@ void generate3Dprojection()
 		//↓見ている視野の角度を一定に保つ。(壁の丸みをなくす)
 		float perpDistance = rays[i].distance * cos(rays[i].rayAngle - player.rotationAngle);
 		//ProjPlaneを表示してみる。おそらく画面に対する壁の高さの割合を決めている
-		float distanceProjPlane = (WINDOW_WIDTH / 2) / tan(FOV_ANGLE / 2);
+		// float distanceProjPlane = (WINDOW_WIDTH / 2) / tan(FOV_ANGLE / 2);
 		//↓これが曖昧(おそらく1タイルに対しての、1レーすの距離を画面サイズに拡大してる)
-		float projectedWallHeight = (TILE_SIZE / perpDistance) * distanceProjPlane / 2;
+		float projectedWallHeight = (TILE_SIZE / perpDistance) * DIST_PROJ_PLANE;
 
 		int wallStripHeight = (int)projectedWallHeight;
 
@@ -387,21 +388,23 @@ void generate3Dprojection()
 		int textureOffsetX;
 		if(rays[i].wasHitVertical)
 		{
-			textureOffsetX = (int)rays[i].wallHitY % TEXTURE_HEIGHT;
+			textureOffsetX = (int)rays[i].wallHitY % TILE_SIZE;
 		} else {
-			textureOffsetX = (int)rays[i].wallHitX % TEXTURE_WIDTH;
+			textureOffsetX = (int)rays[i].wallHitX % TILE_SIZE;
 		}
 
 		int texNum = rays[i].wallHitContent - 1;
-	
+
+		int texture_width = wallTextures[texNum].width;
+		int texture_height = wallTextures[texNum].height;
 		// render the wall from wallTopPixel to wallBottomPixel
 		for (int y = wallTopPixel; y < wallBottomPixel; y++)
 		{
 			int distanceFromTop = y + (wallStripHeight / 2) - (WINDOW_HEIGHT / 2);
 			//高さを伸縮できる。
-			int textureOffsetY = distanceFromTop * ((float)TEXTURE_HEIGHT / wallStripHeight);
+			int textureOffsetY = distanceFromTop * ((float)texture_height / wallStripHeight);
 
-			Uint32 texelColor = textures[texNum][(TEXTURE_WIDTH * textureOffsetY) + textureOffsetX];
+			uint32_t texelColor = wallTextures[texNum].texture_buffer[(texture_width * textureOffsetY) + textureOffsetX];
 			colorBuffer[(WINDOW_WIDTH * y) + i] = texelColor;
 		}
 		// set the color of the floor
@@ -411,7 +414,7 @@ void generate3Dprojection()
 	};
 }
 
-void clearColorBuffer(Uint32 color)
+void clearColorBuffer(uint32_t color)
 {
 	for (int x = 0; x < WINDOW_WIDTH; x++)
 		for (int y = 0; y < WINDOW_HEIGHT; y++)
@@ -424,7 +427,7 @@ void renderColorBuffer()
 		colorBufferTexture,
 		NULL,
 		colorBuffer,
-		(int)((Uint32)WINDOW_WIDTH * sizeof(Uint32))
+		(int)((uint32_t)WINDOW_WIDTH * sizeof(uint32_t))
 		);
 	SDL_RenderCopy(renderer, colorBufferTexture, NULL, NULL);
 }
@@ -434,7 +437,7 @@ void render()
 	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 	SDL_RenderClear(renderer);
 
-	generate3Dprojection();
+	generate3DProjection();
 
 	//clear the color buffer
 	renderColorBuffer();
@@ -450,6 +453,7 @@ void render()
 
 void destroyWindow()
 {
+
 	free(colorBuffer);
 	SDL_DestroyTexture(colorBufferTexture);
 	SDL_DestroyRenderer(renderer);
@@ -469,25 +473,18 @@ void setup() {
 	//ラジアン変換
 	player.turnSpeed = 45 * (PI / 180);
 
-	colorBuffer = (Uint32*)malloc(sizeof(Uint32) * WINDOW_WIDTH * WINDOW_HEIGHT);
+	colorBuffer = (uint32_t*)malloc(sizeof(uint32_t) * WINDOW_WIDTH * WINDOW_HEIGHT);
 	// create an SDL_Texture to display the colorbuffer
 	colorBufferTexture = SDL_CreateTexture(
 		renderer,
-		SDL_PIXELFORMAT_ARGB8888,
+		SDL_PIXELFORMAT_RGBA32,
 		SDL_TEXTUREACCESS_STREAMING,
 		WINDOW_WIDTH,
 		WINDOW_HEIGHT
 	);
 
-	//load some textures from the textures.h
-	textures[0] = (Uint32*)REDBRICK_TEXTURE;
-	textures[1] = (Uint32*)PURPLESTONE_TEXTURE;
-	textures[2] = (Uint32*)MOSSYSTONE_TEXTURE;
-	textures[3] = (Uint32*)GRAYSTONE_TEXTURE;
-	textures[4] = (Uint32*)COLORSTONE_TEXTURE;
-	textures[5] = (Uint32*)BLUESTONE_TEXTURE;
-	textures[6] = (Uint32*)WOOD_TEXTURE;
-	textures[7] = (Uint32*)EAGLE_TEXTURE;
+	//Asks uPng library to decode all PNG files and loads the walltTextures array
+	loadWallTextures();
 }
 
 int main(void)
